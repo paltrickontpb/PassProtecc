@@ -21,10 +21,12 @@ uint64_t entropy;
 int programPosition; //State variable
 
 void setup()   
-{          
+{   
+      
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
-  programPosition = SPLASHSCREEN;
+  //programPosition = SPLASHSCREEN;
+  programPosition = PIN_SCREEN;
   renderScreen(programPosition);
   
   wdt_disable();
@@ -38,34 +40,24 @@ void setup()
   pinMode( BUTTON_UP_PIN,     INPUT_PULLUP );
 
   Wire.begin();
-  EEPROM.update( 1023, 42 );
-  attachInterrupt( 2, wakeInterrupt, FALLING );
+  //EEPROM.update( 1023, 42 );
+  //attachInterrupt( 2, wakeInterrupt, FALLING );
   
-  programPosition = PIN_SCREEN; 
-  delay(3000);
+  //programPosition = PIN_SCREEN; 
+  delay(50);
 }
 
 void loop() {
   renderScreen(programPosition);
 }
-
-void drawLock(int a){
+/*
+void drawLock(){
   display.clearDisplay();
-  switch(a){
-    case 0:
-      display.drawBitmap(0, 0, lockClose, 128, 64, WHITE);
-      break;
-    case 1:
-      display.drawBitmap(0, 0, lockOpen, 128, 64, WHITE);
-      break;
-    default:
-      display.drawBitmap(0, 0, lockClose, 128, 64, WHITE);
-      break;
-  }
+  display.drawBitmap(0, 0, lockClose, 128, 64, WHITE);
   display.display();
-  delay(500);
+  delay(50);
 }
-
+*/
 void drawUnlockerScreen(){
   display.clearDisplay();
   makeCrease(pinData);
@@ -121,24 +113,105 @@ void makeCrease(int num){
   }
 }
 
-void wakeInterrupt() {}
-
-
 void renderScreen(uint8_t state) {
   switch(state){
     case SPLASHSCREEN:
-      drawLock(0);
+      //drawLock();
       break;
     case PIN_SCREEN:
       drawUnlockerScreen();
       break;
     case PRE_INDEX:
-      drawLock(1);
+      loaderScreen();
+      break;
+    case MAIN_SITE:
+      //tempo(); nameSake
+      showDataScreen();
       break;
     default :
       break;
   }
 }
+
+void loaderScreen(){
+  delay(2000);
+  int i;
+  display.clearDisplay();
+  display.setCursor(32,28);
+  display.setTextSize(1.5);
+  display.setTextColor(WHITE);
+  display.print("Unlocking");
+  display.display();
+  delay(300);
+  display.print(".");
+  display.display();
+  delay(200);
+  display.print(".");
+  display.display();
+  delay(200);
+  display.print(".");
+  display.display();
+  delay(200);
+  display.print(".");
+  display.display();
+  siteIndex = 0;
+  unlock();
+  //Call unlock function and preset the siteIndex to 0
+  //handleIO();
+  delay(2000);
+  programPosition++;
+  renderScreen(programPosition);
+}
+
+void showDataScreen(){
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+
+  //show page number
+  display.setTextSize(1.5);
+  display.setCursor(37,56);
+  display.print("Page ");
+  display.print(siteIndex+1);
+  display.print("/20");
+
+  //show page data
+  display.setCursor(0,0);
+  display.print("Name : ");
+  for ( int i = 0; i < 14; i++ ){
+    display.print(currentSite[i]);
+  }
+  //Data Input Name
+  display.setCursor(0,8);
+  display.print("User : ");
+  for ( int i = 0; i < 14; i++ ){
+    display.print(currentUser[i]);
+  }
+  //Data Input User
+  display.setCursor(0,16);
+  display.print("Pass : ");
+  for ( int i = 0; i < 14; i++ ){
+    display.print(currentPass[i]);
+  }
+  //Data Input Pass
+
+  display.setCursor(0,32);
+  display.print("Edit");
+  display.setCursor(0,40);
+  display.print("(UP)");
+  display.setCursor(95,32);
+  display.print("Erase");
+  display.setCursor(92,40);
+  display.setTextSize(1);
+  display.print("(DOWN)");
+
+  
+
+  display.display();
+  handleIO();
+  
+}
+
+//IO Modules
 
 void handleIO(){
   while(true) {
@@ -174,6 +247,7 @@ void handleIO(){
         }
       }
     }
+    //wdt_reset();
   }
 }
 
@@ -220,6 +294,11 @@ void upButtonClicked(){
       break;
     case PRE_INDEX:
       break;
+    case MAIN_SITE:
+      siteIndex++;
+      unlock();
+      renderScreen(programPosition);
+      break;
     default:
       break;
   }
@@ -232,6 +311,8 @@ void downButtonClicked(){
     case PIN_SCREEN:
       break;
     case PRE_INDEX:
+      break;
+    case MAIN_SITE:
       break;
     default:
       break;
@@ -249,6 +330,11 @@ void centerButtonClicked(){
       makeCrease(pinData);
       break;
     case PRE_INDEX:
+      programPosition++;
+      renderScreen(programPosition);
+      break;
+    case MAIN_SITE:
+      lock();
       break;
     default:
       break;
@@ -260,12 +346,22 @@ void centerButtonPush(){
     case SPLASHSCREEN:
       break;
     case PIN_SCREEN:
-      if(pinAddr>3){
+      if(pinAddr>=3){
+        mainPIN[pinAddr] = pinData;
         programPosition++;
         renderScreen(programPosition);
       }
       break;
     case PRE_INDEX:
+      programPosition++;
+      renderScreen(programPosition);
+      break;
+    case MAIN_SITE:
+      Keyboard.begin();
+      for(int i=0; i<16; i++) Keyboard.print(currentUser[i]);
+      Keyboard.println("");
+      for(int i=0; i<16; i++) Keyboard.print(currentPass[i]);
+      Keyboard.end();
       break;
     default:
       break;
@@ -360,3 +456,5 @@ void readEntry( byte *entry ) {
     delay( 2000 );
   }
 }
+
+//Keyboard
