@@ -25,7 +25,6 @@ void setup()
       
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
-  //programPosition = SPLASHSCREEN;
   programPosition = PIN_SCREEN;
   renderScreen(programPosition);
   
@@ -41,23 +40,13 @@ void setup()
 
   Wire.begin();
   //EEPROM.update( 1023, 42 );
-  //attachInterrupt( 2, wakeInterrupt, FALLING );
-  
-  //programPosition = PIN_SCREEN; 
   delay(50);
 }
 
 void loop() {
   renderScreen(programPosition);
 }
-/*
-void drawLock(){
-  display.clearDisplay();
-  display.drawBitmap(0, 0, lockClose, 128, 64, WHITE);
-  display.display();
-  delay(50);
-}
-*/
+
 void drawUnlockerScreen(){
   display.clearDisplay();
   makeCrease(pinData);
@@ -115,9 +104,6 @@ void makeCrease(int num){
 
 void renderScreen(uint8_t state) {
   switch(state){
-    case SPLASHSCREEN:
-      //drawLock();
-      break;
     case PIN_SCREEN:
       drawUnlockerScreen();
       break;
@@ -125,8 +111,13 @@ void renderScreen(uint8_t state) {
       loaderScreen();
       break;
     case MAIN_SITE:
-      //tempo(); nameSake
       showDataScreen();
+      break;
+    case ERASE_SCREEN:
+      showEraseScreen();
+      break;
+    case EDIT_SCREEN_MENU:
+      showEditScreenMenu();
       break;
     default :
       break;
@@ -134,7 +125,8 @@ void renderScreen(uint8_t state) {
 }
 
 void loaderScreen(){
-  delay(2000);
+  delay(100);
+  siteIndex = 0;
   int i;
   display.clearDisplay();
   display.setCursor(32,28);
@@ -142,23 +134,13 @@ void loaderScreen(){
   display.setTextColor(WHITE);
   display.print("Unlocking");
   display.display();
-  delay(300);
-  display.print(".");
-  display.display();
-  delay(200);
-  display.print(".");
-  display.display();
-  delay(200);
-  display.print(".");
-  display.display();
-  delay(200);
-  display.print(".");
-  display.display();
-  siteIndex = 0;
+  for(int j=0; j<4; j++){
+    delay(200);
+    display.print(".");
+    display.display();
+  }
   unlock();
-  //Call unlock function and preset the siteIndex to 0
-  //handleIO();
-  delay(2000);
+  delay(1250);
   programPosition++;
   renderScreen(programPosition);
 }
@@ -211,6 +193,54 @@ void showDataScreen(){
   
 }
 
+void showEraseScreen(){
+  display.clearDisplay();
+  display.setCursor(26,8);
+  display.print("Are You Sure ?");
+  display.setCursor(35,24);
+  display.print("YES : Press");
+  display.setCursor(29,34);
+  display.print("NO : Swipe up");
+  display.display();
+  handleIO();
+}
+
+void showEditScreenMenu(){
+  display.clearDisplay();
+
+  //show page data
+  display.setCursor(0,0);
+  display.print("Name : ");
+  for ( int i = 0; i < 14; i++ ) display.print(currentSite[i]);
+  //Data Input Name
+  display.setCursor(0,8);
+  display.print("User : ");
+  for ( int i = 0; i < 14; i++ ) display.print(currentUser[i]);
+  //Data Input User
+  display.setCursor(0,16);
+  display.print("Pass : ");
+  for ( int i = 0; i < 14; i++ ) display.print(currentPass[i]);
+  
+  
+  display.setCursor(0,40);
+  for ( int i = 0; i < 32; i++ ){
+    display.print(keyboard1[i]);
+    display.print(' ');
+  }
+  display.setCursor(0,48);
+  for ( int i = 0; i < 32; i++ ){
+    display.print(keyboard2[i]);
+    display.print(' ');
+  }
+  display.setCursor(0,56);
+  for ( int i = 0; i < 32; i++ ){
+    display.print(keyboard3[i]);
+    display.print(' ');
+  }
+  display.display();
+}
+
+
 //IO Modules
 
 void handleIO(){
@@ -253,14 +283,20 @@ void handleIO(){
 
 void leftButtonClicked(){
   switch(programPosition){
-    case SPLASHSCREEN:
-      break;
     case PIN_SCREEN:
       pinData++;
       pinData = pinData % 10;
       makeCrease(pinData);
       break;
     case PRE_INDEX:
+      break;
+    case MAIN_SITE:
+      programPosition = EDIT_SCREEN_MENU;
+      renderScreen(programPosition);
+      break;
+    case ERASE_SCREEN:
+      programPosition = MAIN_SITE;
+      renderScreen(programPosition);
       break;
     default:
       break;
@@ -269,8 +305,6 @@ void leftButtonClicked(){
 
 void rightButtonClicked(){
   switch(programPosition){
-    case SPLASHSCREEN:
-      break;
     case PIN_SCREEN:
       pinData--;
       if (pinData < 0){
@@ -280,6 +314,12 @@ void rightButtonClicked(){
       break;
     case PRE_INDEX:
       break;
+    case MAIN_SITE:
+      programPosition = ERASE_SCREEN;
+      renderScreen(programPosition);
+      break;
+    case ERASE_SCREEN:
+      break;
     default:
       break;
   }
@@ -288,8 +328,6 @@ void rightButtonClicked(){
 
 void upButtonClicked(){
   switch(programPosition){
-    case SPLASHSCREEN:
-      break;
     case PIN_SCREEN:
       break;
     case PRE_INDEX:
@@ -306,8 +344,6 @@ void upButtonClicked(){
 
 void downButtonClicked(){
   switch(programPosition){
-    case SPLASHSCREEN:
-      break;
     case PIN_SCREEN:
       break;
     case PRE_INDEX:
@@ -321,8 +357,6 @@ void downButtonClicked(){
 
 void centerButtonClicked(){
   switch(programPosition){
-    case SPLASHSCREEN:
-      break;
     case PIN_SCREEN:
       mainPIN[pinAddr] = pinData;
       pinAddr++;
@@ -334,8 +368,18 @@ void centerButtonClicked(){
       renderScreen(programPosition);
       break;
     case MAIN_SITE:
-      lock();
+      //lock();
+      Keyboard.begin();
+      for(int i=0; i<16; i++) Keyboard.print(currentUser[i]);
+      Keyboard.end();
       break;
+    case ERASE_SCREEN:
+      for(int i=0; i<16; i++) currentSite[i] = ' ';
+      for(int i=0; i<16; i++) currentUser[i] = ' ';
+      for(int i=0; i<16; i++) currentPass[i] = ' ';
+      lock();
+      programPosition = MAIN_SITE;
+      renderScreen(programPosition);
     default:
       break;
   }
@@ -343,8 +387,6 @@ void centerButtonClicked(){
 
 void centerButtonPush(){
   switch(programPosition){
-    case SPLASHSCREEN:
-      break;
     case PIN_SCREEN:
       if(pinAddr>=3){
         mainPIN[pinAddr] = pinData;
@@ -359,9 +401,11 @@ void centerButtonPush(){
     case MAIN_SITE:
       Keyboard.begin();
       for(int i=0; i<16; i++) Keyboard.print(currentUser[i]);
-      Keyboard.println("");
+      Keyboard.press(179);
+      Keyboard.release(179);
       for(int i=0; i<16; i++) Keyboard.print(currentPass[i]);
       Keyboard.end();
+      delay(1000);
       break;
     default:
       break;
