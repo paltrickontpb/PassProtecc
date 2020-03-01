@@ -389,16 +389,24 @@ void setupKeyboardLayout() {
   }
 
   oledSetCursor(0, 5);
-  if (letIndex == 32) invertPrint("> Switch Keyboard");
-  else oled.print("Switch Keyboard    ");
+  if (letIndex == 32) invertPrint("> Switch");
+  else oled.print("Switch  ");
+
+  oledSetCursor(90, 5);
+  if (letIndex == 36) invertPrint("> Del");
+  else oled.print("  Del");
 
   oledSetCursor(0, 6);
   if (letIndex == 33) invertPrint("> Randomize");
   else oled.print("Randomize    ");
 
   oledSetCursor(0, 7);
-  if (letIndex == 34) invertPrint("> Save Value");
-  else oled.print("Save Value    ");
+  if (letIndex == 34) invertPrint("> Save");
+  else oled.print("Save   ");
+
+  oledSetCursor(70, 7);
+  if (letIndex == 35) invertPrint("> Cancel");
+  else oled.print("  Cancel");
 }
 
 void oledSetCursor(int x, int y) {
@@ -523,7 +531,8 @@ void leftButtonClicked() {
       renderScreen(programPosition);
       break;
     case EDIT_KEYBOARD:
-      if (letIndex > 31) letIndex -= 1;
+      if (letIndex == 36) letIndex = 31;
+      else if (letIndex > 31) letIndex -= 1;
       else letIndex -= 11;
       if (letIndex < 0) letIndex = 34;
       setupKeyboardLayout();
@@ -556,12 +565,13 @@ void rightButtonClicked() {
       renderScreen(programPosition);
       break;
     case EDIT_KEYBOARD:
-      if (letIndex > 31) letIndex += 1;
+      if (letIndex == 36) letIndex = 33;
+      else if (letIndex > 31) letIndex += 1;
       else {
         letIndex += 11;
         if (letIndex > 31) letIndex = 32;
       }
-      if (letIndex > 34) letIndex = 0;
+      if (letIndex > 34 and letIndex < 36) letIndex = 0;
       setupKeyboardLayout();
       break;
     default:
@@ -583,8 +593,24 @@ void upButtonClicked() {
       renderScreen(programPosition);
       break;
     case EDIT_KEYBOARD:
-      letIndex += 1;
-      letIndex = letIndex % 32;
+      switch (letIndex) {
+        case 32:
+          letIndex = 36;
+          break;
+        case 36:
+          letIndex = 32;
+          break;
+        case 34:
+          letIndex = 35;
+          break;
+        case 35:
+          letIndex = 34;
+          break;
+        default:
+          letIndex += 1;
+          letIndex = letIndex % 32;
+          break;
+      }
       setupKeyboardLayout();
       break;
     default:
@@ -609,9 +635,25 @@ void downButtonClicked() {
       renderScreen(programPosition);
       break;
     case EDIT_KEYBOARD:
-      letIndex -= 1;
-      if (letIndex < 0) {
-        letIndex = 31;
+      switch (letIndex) {
+        case 32:
+          letIndex = 36;
+          break;
+        case 36:
+          letIndex = 32;
+          break;
+        case 34:
+          letIndex = 35;
+          break;
+        case 35:
+          letIndex = 34;
+          break;
+        default:
+          letIndex -= 1;
+          if (letIndex < 0) {
+            letIndex = 31;
+          }
+          break;
       }
       setupKeyboardLayout();
       break;
@@ -705,6 +747,20 @@ void centerButtonClicked() {
           programPosition = MAIN_SITE;
           renderScreen(programPosition);
           break;
+        case 35:
+          programPosition = MAIN_SITE;
+          unlock();
+          renderScreen(programPosition);
+          break;
+        case 36:
+          if (nameIndex > 0) nameIndex -= 1;
+          switch (editVar) {
+            case 0: currentSite[nameIndex] = ' '; break;
+            case 1: currentUser[nameIndex] = ' '; break;
+            case 2: currentPass[nameIndex] = ' '; break;
+            default : break;
+          }
+          break;
         default:
           switch (keyType) {
             case 0:
@@ -788,7 +844,7 @@ void centerButtonPush() {
 
 //SECURITY PARTS
 
-void sanitize( byte *s ) {
+void sanitize( byte * s ) {
   for ( int i = 0; i < 48; i++ ) {
     if (( s[ i ] < 32 ) || ( s[ i ] > 126 )) {
       int r = random( 94 );
@@ -833,7 +889,7 @@ uint8_t present() {
   return 0;
 }
 
-void writeEntry( byte *entry ) {
+void writeEntry( byte * entry ) {
   int index = siteIndex * 64;
   if ( present() ) {
     for ( int i = 0; i < 64; i++ ) {
@@ -853,7 +909,7 @@ void writeEntry( byte *entry ) {
   }
 }
 
-void readEntry( byte *entry ) {
+void readEntry( byte * entry ) {
   int32_t index = siteIndex * 64;
   if ( present() ) {
     Wire.beginTransmission( 0x50 );
