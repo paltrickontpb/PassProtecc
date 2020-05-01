@@ -1,18 +1,13 @@
 #include "globals.h"
 #include "SSD1306Ascii.h"
 #include "SSD1306AsciiWire.h"
-#include <SPI.h>
-#include <nRF24L01.h>
-#include <RF24.h>
-
-RF24 radio(7, 8);
-const byte address[6] = "00001";
 
 SSD1306AsciiWire oled;
 
 int mainPIN[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; //Main PIN
 int pinAddr = 0; //Individual Location
 int pinData = 0; //Individual Data
+int encType = 0;
 
 char currentSite[ 16 ] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' }; //Site Name
 char currentUser[ 16 ] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' }; //Username
@@ -49,11 +44,6 @@ void setup()
   wdt_disable();
 
   Serial.begin( 9600 );
-
-  radio.begin();
-  radio.openReadingPipe(0, address);
-  radio.setPALevel(RF24_PA_MIN);
-  radio.startListening();
 
   analogReference( INTERNAL );
   pinMode( BUTTON_CENTER_PIN, INPUT_PULLUP );
@@ -144,6 +134,9 @@ void renderScreen(uint8_t state) {
     case PIN_SCREEN:
       drawUnlockerScreen();
       break;
+    case ENC_SELECTION:
+      drawEncType();
+      break;
     case PRE_INDEX:
       loaderScreen();
       break;
@@ -166,7 +159,6 @@ void renderScreen(uint8_t state) {
 
 void loaderScreen() {
   oled.setFont(System5x7);
-  delay(100);
   siteIndex = 0;
   oled.clear();
   oledSetCursor(32, 4);
@@ -185,6 +177,32 @@ void loaderScreen() {
 
   oled.set1X();
   renderScreen(programPosition);
+}
+
+void drawEncType() {
+  oled.clear();
+  delay(100);
+  oledSetCursor(22, 0);
+  oled.set1X();
+  oled.print("Select Encryption");
+  //oled.set2X();
+  oledSetCursor(40, 3);
+  oled.print("AES-CBC  "); 
+  oledSetCursor(40, 5);
+  oled.print("ChaCha20  ");
+  
+  switch (encType) {
+    case 0:
+      oledSetCursor(32, 3);
+      invertPrint("> AES-CBC");
+      break;
+    case 1:
+      oledSetCursor(32, 5);
+      invertPrint("> ChaCha20");
+      break;
+    default: break;
+  }
+  oled.set1X();
 }
 
 void showDataScreen() {
@@ -513,6 +531,13 @@ void leftButtonClicked() {
       pinData = pinData % 10;
       makeCrease(pinData);
       break;
+    case ENC_SELECTION:
+      encType--;
+      if (encType < 0) {
+        encType = 1;
+      }
+      renderScreen(programPosition);
+      break;
     case PRE_INDEX:
       break;
     case MAIN_SITE:
@@ -550,6 +575,11 @@ void rightButtonClicked() {
         pinData = 9;
       }
       makeCrease(pinData);
+      break;
+    case ENC_SELECTION:
+      encType++;
+      encType %= 2;
+      renderScreen(programPosition);
       break;
     case PRE_INDEX:
       break;
@@ -670,6 +700,17 @@ void centerButtonClicked() {
       pinData = 0;
       makeCrease(pinData);
       break;
+    case ENC_SELECTION:
+      if (encType == 1) {
+        for (int i = 0; i < 16; i++) {
+          mainPIN[i] = + i;
+          if (mainPIN[i] > 20) mainPIN[i] -= 20;
+          if (mainPIN[i] > 10) mainPIN[i] -= 10;
+        }
+      }
+      programPosition = PRE_INDEX;
+      renderScreen(programPosition);
+      break;
     case PRE_INDEX:
       programPosition++;
       renderScreen(programPosition);
@@ -677,11 +718,11 @@ void centerButtonClicked() {
     case MAIN_SITE:
       //lock();
       /*
-        Keyboard.begin();
-        for (int i = 0; i < 16; i++) {
+      Keyboard.begin();
+      for (int i = 0; i < 16; i++) {
         if (currentPass[i] != ' ') Keyboard.print(currentPass[i]);
-        }
-        Keyboard.end(); */
+      }
+      Keyboard.end(); */
       break;
     case ERASE_SCREEN:
       for (int i = 0; i < 16; i++) currentSite[i] = ' ';
@@ -804,7 +845,8 @@ void centerButtonPush() {
     case PIN_SCREEN:
       if (pinAddr >= 3) {
         mainPIN[pinAddr] = pinData;
-        programPosition++;
+        //oled.setFont(System5x7);
+        programPosition = ENC_SELECTION;
         renderScreen(programPosition);
       }
       break;
@@ -823,8 +865,8 @@ void centerButtonPush() {
         if (currentPass[i] != ' ') Keyboard.print(currentPass[i]);
       }
       delay(20);
-      Keyboard.press(176);
-      Keyboard.release(176);
+      //Keyboard.press(176);
+      //Keyboard.release(176);
       Keyboard.end();
       delay(1000);
       break;

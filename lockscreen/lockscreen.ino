@@ -1,6 +1,13 @@
 #include "globals.h"
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+
+RF24 radio(7, 8);
+const byte address[6] = "00001";
+
 
 Adafruit_SSD1306 display(-1);
 
@@ -11,14 +18,18 @@ int pinData = 0; //Individual Data
 char currentSite[ 16 ] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' }; //Site Name
 char currentUser[ 16 ] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' }; //Username
 char currentPass[ 16 ] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' }; //Password
-int16_t siteIndex;  
-
+int16_t siteIndex = 0;
+/*
+char cSite[ 16 ] = { 'P', 'r', 'o', 'j', 'j', 'a', 'l', 's', ' ', 'G', 'i', 't', ' ', ' ', ' ', ' ' }; //Site Name
+char cUser[ 16 ] = { 'p', 'a', 'l', 't', 'r', 'i', 'c', 'k', 'o', 'n', 't', 'p', 'b', ' ', ' ', ' ' }; //Username
+char cPass[ 16 ] = { 'P', 'g', '@', '1', '0', '0', '9', '1', '9', '9', '8', ' ', ' ', ' ', ' ', ' ' }; //Password
+*/
 byte data[ 64 ]; //CipherText
 byte key[ 16 ]; //User Input Key
 byte iv[ 16 ]; //Initialization Vector
 uint64_t entropy;
 
-int programPosition; //State variable
+int8_t programPosition; //State variable
 
 void setup()   
 {   
@@ -30,7 +41,13 @@ void setup()
   
   wdt_disable();
 
-  Serial.begin( 9600 );                
+  Serial.begin( 9600 );   
+
+  radio.begin();
+  radio.openReadingPipe(0, address);
+  radio.setPALevel(RF24_PA_MIN);
+  radio.startListening();
+         
   analogReference( INTERNAL );                  
   pinMode( BUTTON_CENTER_PIN, INPUT_PULLUP );  
   pinMode( BUTTON_LEFT_PIN,   INPUT_PULLUP );
@@ -41,10 +58,15 @@ void setup()
   Wire.begin();
   //EEPROM.update( 1023, 42 );
   delay(50);
+  renderScreen(programPosition);
 }
 
 void loop() {
-  renderScreen(programPosition);
+  handleIO();  
+  /* Slower And Doesn't Respond for now
+  if ( handleButtonChecker() ) {
+    renderScreen(programPosition);
+  } */
 }
 
 void drawUnlockerScreen(){
@@ -52,7 +74,7 @@ void drawUnlockerScreen(){
   makeCrease(pinData);
   display.display(); 
   
-  handleIO();  
+  //handleIO();  
 }
 
 void makeCrease(int num){
@@ -127,35 +149,34 @@ void renderScreen(uint8_t state) {
 void loaderScreen(){
   delay(100);
   siteIndex = 0;
-  int i;
   display.clearDisplay();
   display.setCursor(32,28);
   display.setTextSize(1.5);
   display.setTextColor(WHITE);
   display.print("Unlocking");
   display.display();
-  for(int j=0; j<4; j++){
+  for(int j=0; j<3; j++){
     delay(200);
     display.print(".");
     display.display();
   }
   unlock();
-  delay(1250);
+  delay(500);
   programPosition++;
+  display.setTextColor(WHITE);
+  display.setTextSize(1);
   renderScreen(programPosition);
 }
 
 void showDataScreen(){
   display.clearDisplay();
-  display.setTextColor(WHITE);
-
+  
   //show page number
-  display.setTextSize(1.5);
   display.setCursor(37,56);
   display.print("Page ");
   display.print(siteIndex+1);
   display.print("/20");
-
+  
   //show page data
   display.setCursor(0,0);
   display.print("Name : ");
@@ -185,11 +206,9 @@ void showDataScreen(){
   display.setCursor(92,40);
   display.setTextSize(1);
   display.print("(DOWN)");
-
   
-
-  display.display();
-  handleIO();
+  display.display();  
+  //handleIO();
   
 }
 
@@ -202,69 +221,104 @@ void showEraseScreen(){
   display.setCursor(29,34);
   display.print("NO : Swipe up");
   display.display();
-  handleIO();
+  //handleIO();
 }
 
 void showEditScreenMenu(){
   display.clearDisplay();
-
-  //show page data
-  display.setCursor(0,0);
-  display.print("Name : ");
-  for ( int i = 0; i < 14; i++ ) display.print(currentSite[i]);
-  //Data Input Name
-  display.setCursor(0,8);
-  display.print("User : ");
-  for ( int i = 0; i < 14; i++ ) display.print(currentUser[i]);
-  //Data Input User
-  display.setCursor(0,16);
-  display.print("Pass : ");
-  for ( int i = 0; i < 14; i++ ) display.print(currentPass[i]);
-  
-  
-  display.setCursor(0,40);
-  for ( int i = 0; i < 32; i++ ){
-    display.print(keyboard1[i]);
-    display.print(' ');
-  }
-  display.setCursor(0,48);
-  for ( int i = 0; i < 32; i++ ){
-    display.print(keyboard2[i]);
-    display.print(' ');
-  }
-  display.setCursor(0,56);
-  for ( int i = 0; i < 32; i++ ){
-    display.print(keyboard3[i]);
-    display.print(' ');
-  }
   display.display();
+/*
+  for(int i=0; i<16; i++) currentSite[i] = cSite[i];
+  for(int i=0; i<16; i++) currentUser[i] = cUser[i];
+  for(int i=0; i<16; i++) currentPass[i] = cPass[i];
+  lock();
+*/
+  display.setCursor(20,28);
+  display.print("Work in Progress");
+  display.display();
+  delay(1500);
+  programPosition = MAIN_SITE;
+  renderScreen(programPosition);
 }
 
 
 //IO Modules
+/*
+int handleButtonChecker() {       
+  
+  if ( !digitalRead( BUTTON_CENTER_PIN )) {
+   delay( DEBOUNCEDELAY );
+    if ( !digitalRead( BUTTON_CENTER_PIN )) {
+      delay(500);
+      if( !digitalRead( BUTTON_CENTER_PIN )) {
+        centerButtonPush();
+      } else {
+        centerButtonClicked();
+      }
+      return 1;
+    }
+  }
+  if ( !digitalRead( BUTTON_RIGHT_PIN )) {
+    delay( DEBOUNCEDELAY );
+    if ( !digitalRead( BUTTON_RIGHT_PIN )) {
+      rightButtonClicked();
+      return 1;
+    }
+  }
+  if ( !digitalRead( BUTTON_LEFT_PIN )) {
+    delay( DEBOUNCEDELAY );
+    if ( !digitalRead( BUTTON_LEFT_PIN )) {
+      leftButtonClicked();
+      return 1;
+    }
+  }
+  if ( !digitalRead( BUTTON_UP_PIN )) {
+    delay( DEBOUNCEDELAY );
+    if ( !digitalRead( BUTTON_UP_PIN )) {
+      upButtonClicked();
+      return 1;
+    }
+  }
+  if ( !digitalRead( BUTTON_DOWN_PIN )) {
+    delay( DEBOUNCEDELAY );
+    if ( !digitalRead( BUTTON_DOWN_PIN )) {
+      downButtonClicked();
+      return 1;
+    }
+  }
+  return 0;
+} */
 
 void handleIO(){
-  while(true) {
-    int mouseLeft =   pulseIn(BUTTON_LEFT_PIN, LOW,  40000);
-    int mouseRight =  pulseIn(BUTTON_RIGHT_PIN, LOW,  40000);
-    int mouseUp =  pulseIn(BUTTON_UP_PIN, LOW, 40000);
-    int mouseDown =   pulseIn(BUTTON_DOWN_PIN, LOW, 40000);
+    int mouseLeft =   pulseIn(BUTTON_LEFT_PIN, LOW,  30000);
+    int mouseRight =  pulseIn(BUTTON_RIGHT_PIN, LOW,  30000);
+    int mouseUp =  pulseIn(BUTTON_UP_PIN, LOW, 30000);
+    int mouseDown =   pulseIn(BUTTON_DOWN_PIN, LOW, 30000);
         
     if (mouseLeft > 0){
+      mouseLeft = NULL;
       leftButtonClicked();
     }
 
     if (mouseRight > 0){
+      mouseRight = NULL;
       rightButtonClicked();
     }
 
     if (mouseUp > 0){
+      mouseUp = NULL;
       upButtonClicked();
     }
 
     if (mouseDown > 0){
+      mouseDown = NULL;
       downButtonClicked();
     }
+
+    mouseLeft = NULL;
+    mouseRight = NULL;
+    mouseUp = NULL;
+    mouseDown = NULL;
 
     if (digitalRead(BUTTON_CENTER_PIN)==0){
       delay(DEBOUNCEDELAY);
@@ -277,8 +331,6 @@ void handleIO(){
         }
       }
     }
-    //wdt_reset();
-  }
 }
 
 void leftButtonClicked(){
@@ -333,7 +385,8 @@ void upButtonClicked(){
     case PRE_INDEX:
       break;
     case MAIN_SITE:
-      siteIndex++;
+      siteIndex = siteIndex + 1;
+      siteIndex = siteIndex % MAXSITES;
       unlock();
       renderScreen(programPosition);
       break;
@@ -349,6 +402,10 @@ void downButtonClicked(){
     case PRE_INDEX:
       break;
     case MAIN_SITE:
+      siteIndex = siteIndex - 1;
+      if ( siteIndex < 0 ) siteIndex = MAXSITES - 1;
+      unlock();
+      renderScreen(programPosition);
       break;
     default:
       break;
@@ -370,7 +427,9 @@ void centerButtonClicked(){
     case MAIN_SITE:
       //lock();
       Keyboard.begin();
-      for(int i=0; i<16; i++) Keyboard.print(currentUser[i]);
+      for(int i=0; i<16; i++) {
+        if (currentPass[i] != ' ') Keyboard.print(currentPass[i]);
+      }
       Keyboard.end();
       break;
     case ERASE_SCREEN:
@@ -400,10 +459,17 @@ void centerButtonPush(){
       break;
     case MAIN_SITE:
       Keyboard.begin();
-      for(int i=0; i<16; i++) Keyboard.print(currentUser[i]);
+      for(int i=0; i<16; i++) {
+        if (currentUser[i] != ' ') Keyboard.print(currentUser[i]);
+      }
       Keyboard.press(179);
       Keyboard.release(179);
-      for(int i=0; i<16; i++) Keyboard.print(currentPass[i]);
+      for(int i=0; i<16; i++) {
+        if (currentPass[i] != ' ') Keyboard.print(currentPass[i]);
+      }
+      delay(20);
+      Keyboard.press(176);
+      Keyboard.release(176);
       Keyboard.end();
       delay(1000);
       break;
@@ -437,7 +503,7 @@ void lock() {      //encrypt currently selected account and store in EEPROM
   writeEntry( data );
 }
 
-void unlock() {      //decrypt currently selected account and store in SRAM
+void unlock() {    
   readEntry( data );
   for ( int i = 0; i < 16; i++ ) {
     iv[ i ] = data[ i + 48 ];
@@ -462,26 +528,26 @@ uint8_t present() {
 
 void writeEntry( byte *entry ) {
   int index = siteIndex * 64;
-  if ( present() ) { //so far this has eluded my attempts to change to page write...
+  if ( present() ) { 
     for ( int i = 0; i < 64; i++ ) {
       Wire.beginTransmission( 0x50 );
       Wire.write((( index + i ) >> 8 ) & 0xFF );
       Wire.write(( index + i ) & 0xFF );
       Wire.write( entry[ i ] );
       Wire.endTransmission( true );
-      delay( 5 );
+      delay( 50 );
     }
   }
   else {
     display.clearDisplay();
     display.print( "Can't connect to memory chip" );
     display.display();
-    delay( 2000 );
+    delay( 200 );
   }
 }
 
 void readEntry( byte *entry ) {
-  int index = siteIndex * 64;
+  int32_t index = siteIndex * 64;
   if ( present() ) {
     Wire.beginTransmission( 0x50 );
     Wire.write(( index >> 8 ) & 0xFF );
@@ -497,7 +563,7 @@ void readEntry( byte *entry ) {
     display.clearDisplay();
     display.print( "Can't connect to memory chip" );
     display.display();
-    delay( 2000 );
+    delay( 200 );
   }
 }
 

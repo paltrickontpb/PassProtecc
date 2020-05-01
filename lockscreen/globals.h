@@ -6,6 +6,7 @@
 #include <avr/sleep.h>
 #include <avr/power.h>
 #include <avr/wdt.h>
+
 #include <Wire.h>
 //#include <EEPROM.h>
 #include <Keyboard.h>
@@ -13,8 +14,12 @@
 
 //uint8_t cygnusState;
 
-#define DEBOUNCEDELAY     15
-#define MAXSITES          64
+#define SSD1306_128_64
+#define SSD1306_LCDWIDTH                  128
+#define SSD1306_LCDHEIGHT                 64
+
+#define DEBOUNCEDELAY     100
+#define MAXSITES          20
 
 #define BUTTON_CENTER_PIN 7
 #define BUTTON_UP_PIN     10
