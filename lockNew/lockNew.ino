@@ -24,6 +24,8 @@ byte data[ 64 ]; //CipherText
 byte key[ 16 ]; //User Input Key
 byte iv[ 16 ]; //Initialization Vector
 uint64_t entropy;
+byte backupEntry[ 64 ]; //Backup Data Variable
+byte restEntry[ 64 ];
 
 int8_t programPosition; //State variable
 int editVar = 0;
@@ -43,7 +45,7 @@ void setup()
 
   wdt_disable();
 
-  Serial.begin( 9600 );
+  Serial.begin( 115200 );
 
   analogReference( INTERNAL );
   pinMode( BUTTON_CENTER_PIN, INPUT_PULLUP );
@@ -59,18 +61,62 @@ void setup()
 }
 
 void loop() {
-  handleIO();
+  if (Serial.available() > 0) {
+    handleSerialEvent();
+  } else {
+    handleIO();
+  }
   /*Slower And Doesn't Respond for now
     if ( handleButtonChecker() ) {
     renderScreen(programPosition);
     }*/
 }
 
+void handleSerialEvent() {
+  char data = Serial.read();
+  if (data != 'r') {
+    programPosition = SERIAL_EVENT;
+    renderScreen(programPosition);
+    switch (data) {
+      case 'c':
+        Serial.print("Connected to Serial mode. Send a Command");
+        Serial.flush();
+        break;
+      case '*':
+        Serial.print("Verication ");
+        if ( Serial.read() == '@' ) Serial.print("Complete");
+        else Serial.print("Incomplete");
+        Serial.flush();
+        break;
+      case 'b':
+        backupChipData();
+        break;
+      case 'u':
+        restoreChipData();
+        break;
+      case '\n':
+        break;
+      default:
+        Serial.print("NIL");
+        Serial.flush();
+        break;
+    }
+  } else {
+    oled.clear();
+    oledSetCursor(32, 4);
+    oled.set1X();
+    oled.print("Resetting");
+    for (int j = 0; j < 3; j++) {
+      delay(200);
+      oled.print(".");
+    }
+    systemReset();
+  }
+}
+
 void drawUnlockerScreen() {
   oled.clear();
   makeCrease(pinData);
-
-
   //handleIO();
 }
 
@@ -134,6 +180,9 @@ void renderScreen(uint8_t state) {
     case PIN_SCREEN:
       drawUnlockerScreen();
       break;
+    case SERIAL_EVENT:
+      drawSerial();
+      break;
     case ENC_SELECTION:
       drawEncType();
       break;
@@ -187,10 +236,10 @@ void drawEncType() {
   oled.print("Select Encryption");
   //oled.set2X();
   oledSetCursor(40, 3);
-  oled.print("AES-CBC  "); 
+  oled.print("AES-CBC  ");
   oledSetCursor(40, 5);
   oled.print("ChaCha20  ");
-  
+
   switch (encType) {
     case 0:
       oledSetCursor(32, 3);
@@ -212,7 +261,8 @@ void showDataScreen() {
   oledSetCursor(37, 7);
   oled.print("Page ");
   oled.print(siteIndex + 1);
-  oled.print("/20");
+  oled.print("/");
+  oled.print(MAXSITES);
 
   //show page data
   oledSetCursor(0, 0);
@@ -247,6 +297,18 @@ void showDataScreen() {
 
   //handleIO();
 
+}
+
+void drawSerial() {
+  oled.clear();
+  oled.setFont(Callibri15);
+  oled.set1X();
+  oledSetCursor(12, 1);
+  oled.print("Device Connected");
+  oledSetCursor(48, 3);
+  oled.print("to PC");
+  oledSetCursor(10, 6);
+  oled.print("Reconnect to reset");
 }
 
 void showEraseScreen() {
@@ -718,11 +780,11 @@ void centerButtonClicked() {
     case MAIN_SITE:
       //lock();
       /*
-      Keyboard.begin();
-      for (int i = 0; i < 16; i++) {
+        Keyboard.begin();
+        for (int i = 0; i < 16; i++) {
         if (currentPass[i] != ' ') Keyboard.print(currentPass[i]);
-      }
-      Keyboard.end(); */
+        }
+        Keyboard.end(); */
       break;
     case ERASE_SCREEN:
       for (int i = 0; i < 16; i++) currentSite[i] = ' ';
@@ -983,4 +1045,69 @@ void invertPrint(char a) {
   oled.setInvertMode(1);
   oled.print(a);
   oled.setInvertMode(0);
+}
+
+
+//Backup Data
+void backupChipData() {
+  //oled Show Restore
+  oled.clear();
+  oled.set1X();
+  oledSetCursor(18, 0);
+  oled.print("Backup Running");
+  oledSetCursor(50, 4);
+  oled.print("out of");
+  oledSetCursor(58, 6);
+  oled.print(MAXSITES);
+  for ( int i = 0; i < MAXSITES; i++ ) {
+    //oled stuff
+    oledSetCursor(58, 2);
+    oled.print(i + 1);
+    siteIndex = i;
+    readEntry( backupEntry );
+    for ( int j = 0; j < 64; j++ ) Serial.write( backupEntry[ j ] );
+  }
+  for (int i = 0; i < 64; i++) backupEntry[i] = ' ';
+  delay(2000);
+  renderScreen(programPosition);
+  //zamekDisplay.print( "Finished Dumping" );
+}
+
+void restoreChipData() {
+  float f;
+  oled.clear();
+  oled.set1X();
+  oledSetCursor(18, 0);
+  oled.print("Restore Running");
+  for ( int i = 0; i < 7; i++ ) { //MAXSIETS instead of 5
+    oledSetCursor(50, 4);
+    oled.print(2*i);
+    oled.print(" %");
+    siteIndex = i;
+    for ( int j = 0; j < 64; j++ ){
+      byte *restoreBuffer;
+      Serial.readBytes(restoreBuffer, 1);
+      restEntry[ j ] = restoreBuffer;
+    }
+    writeEntry( restEntry );
+  }
+  delay(2000);
+  renderScreen(programPosition);
+}
+
+
+//System Func
+
+void systemReset() {
+  for (int i = 0; i < 16; i++ ) mainPIN[i] = 0;
+  editVar = 0;
+  keyType = 0;
+  letIndex = 0;
+  nameIndex = 0;
+  pinAddr = 0;
+  pinData = 0;
+  encType = 0;
+  oled.setFont(Callibri15);
+  programPosition = PIN_SCREEN;
+  renderScreen(programPosition);
 }

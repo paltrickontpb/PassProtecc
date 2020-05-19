@@ -17,7 +17,8 @@
 #define RST_PIN -1
 
 #define DEBOUNCEDELAY     100
-#define MAXSITES          20
+#define MAXSITES          50
+#define TOTALSIZE         512
 
 #define BUTTON_CENTER_PIN 8
 #define BUTTON_UP_PIN     10
@@ -27,6 +28,7 @@
 
 //State Definitions
 #define CATCH_ERROR 0 
+#define SERIAL_EVENT 1
 #define PIN_SCREEN 2
 #define PRE_INDEX 3
 #define MAIN_SITE 4
